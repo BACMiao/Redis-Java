@@ -1,0 +1,8 @@
+*.jar
+out/
+.idea/
+classes/
+.settings/
+target/
+*.txt
+*.iml
