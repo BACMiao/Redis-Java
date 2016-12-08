@@ -2,8 +2,7 @@ package com.bapocalypse.redis;
 
 import redis.clients.jedis.Jedis;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @package: com.bapocalypse.redis
@@ -22,7 +21,7 @@ public class HelloRedis {
         conn.select(5);
     }
 
-    public String postArticle(Jedis conn, String user, String title, String link){
+    public String postArticle(Jedis conn, String user, String title, String link) {
         //生成一个新的文章ID,conn.incr()作用为将键存储的值加上1。
         String articleId = String.valueOf(conn.incr("article:"));
         String voted = "voted:" + articleId;
@@ -54,10 +53,33 @@ public class HelloRedis {
 
         //从article:id标识符里面取出文章ID
         String articleId = article.substring(article.indexOf(':') + 1);
-        if (conn.sadd("voted:" + articleId, user) == 1){
-            conn.zincrby("score:" , VOTE_SCORE , article);
+        if (conn.sadd("voted:" + articleId, user) == 1) {
+            conn.zincrby("score:", VOTE_SCORE, article);
             conn.hincrBy(article, "votes", 1L);
         }
     }
 
+    public List<Map<String, String>> getArticles(Jedis conn, int page){
+        return getArticles(conn, page, "score:");
+    }
+
+    private List<Map<String, String>> getArticles(Jedis conn, int page, String order) {
+        int start = (page - 1) * ARTICLES_PRE_PAGE;           //设置获取文章的起始索引
+        int end = start + ARTICLES_PRE_PAGE - 1;              //设置获取文章的结束索引
+        Set<String> ids = conn.zrevrange(order, start, end);  //获取多个文章ID
+        List<Map<String, String>> articles = new ArrayList<>();
+        for (String id : ids) {
+            Map<String,String> articleData = conn.hgetAll(id);  //根据文章ID获取文章的详细信息
+            articleData.put("id", id);
+            articles.add(articleData);
+        }
+        return articles;
+    }
+
+    public void addGroups(Jedis conn, String articleId, String[] toAdd){
+        String article = "article:" + articleId;
+        for (String group : toAdd){
+            conn.sadd("group:" + group, article);
+        }
+    }
 }
