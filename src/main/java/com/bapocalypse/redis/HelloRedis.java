@@ -1,6 +1,7 @@
 package com.bapocalypse.redis;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.ZParams;
 
 import java.util.*;
 
@@ -59,7 +60,7 @@ public class HelloRedis {
         }
     }
 
-    public List<Map<String, String>> getArticles(Jedis conn, int page){
+    public List<Map<String, String>> getArticles(Jedis conn, int page) {
         return getArticles(conn, page, "score:");
     }
 
@@ -69,17 +70,43 @@ public class HelloRedis {
         Set<String> ids = conn.zrevrange(order, start, end);  //获取多个文章ID
         List<Map<String, String>> articles = new ArrayList<>();
         for (String id : ids) {
-            Map<String,String> articleData = conn.hgetAll(id);  //根据文章ID获取文章的详细信息
+            Map<String, String> articleData = conn.hgetAll(id);  //根据文章ID获取文章的详细信息
             articleData.put("id", id);
             articles.add(articleData);
         }
         return articles;
     }
 
-    public void addGroups(Jedis conn, String articleId, String[] toAdd){
+    public void addGroups(Jedis conn, String articleId, String[] toAdd) {
         String article = "article:" + articleId;
-        for (String group : toAdd){
-            conn.sadd("group:" + group, article);
+        for (String group : toAdd) {
+            conn.sadd("group:" + group, article);      //一个文章可能会属于多个群组
+        }
+    }
+
+    public List<Map<String, String>> getGroupArticles(Jedis conn, String group, int page) {
+        return getGroupArticles(conn, group, page, "score:");
+    }
+
+    private List<Map<String, String>> getGroupArticles(Jedis conn, String group, int page, String order) {
+        String key = order + group;   //为每个群组的每种排列顺序都创建一个键
+        if (!conn.exists(key)) {       //检查是否有已缓存的排序结果，如果没有就进行排序
+            ZParams params = new ZParams().aggregate(ZParams.Aggregate.MAX);
+            conn.zinterstore(key, params, "group:" + group, order); //对给定的集合集合执行交集运算
+            conn.expire(key, 60);   //让Redis在60秒之后自动删除这个有序集合
+        }
+        return getArticles(conn, page, key);   //进行分页并获取文章数据
+    }
+
+    public void printArticles(List<Map<String, String>> articles) {
+        for (Map<String, String> article : articles) {
+            System.out.println("  id: " + article.get("id"));
+            for (Map.Entry<String, String> entry : article.entrySet()) {
+                if (entry.getKey().equals("id")) {
+                    continue;
+                }
+                System.out.println("    " + entry.getKey() + ": " + entry.getValue());
+            }
         }
     }
 }
